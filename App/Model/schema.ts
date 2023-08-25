@@ -8,6 +8,7 @@ export default appSchema({
       columns: [
         { name: 'name', type: 'string' },
         { name: 'description', type: 'string' },
+        // { name: 'created_at', type: 'number' },
       ],
     }),
   ],

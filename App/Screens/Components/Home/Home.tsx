@@ -1,100 +1,121 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useState } from 'react';
 import withObservables from '@nozbe/with-observables';
-import {
-  CustomText,
-  Layout,
-  BottomModalContainer,
-  IsAlertModal,
-} from '@CommonComponent';
+import { CustomText, Layout, CustomTextInput } from '@CommonComponent';
 import { ButtonComponent } from '@SubComponents';
-import { compareAppVersions, getVersionName, openLink } from '@Utils/Helper';
-import { useIsFocused } from '@react-navigation/native';
-import { alertData, isIOS, width } from '@Utils/Constant';
 import { AppContext } from '@AppContext';
 import { database } from '@Services/Watermelon';
+import { FlatList } from 'react-native-gesture-handler';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 const db = database.collections.get('categories');
 const observeCategories = () => db.query().observe();
 
+const styles = StyleSheet.create({
+  centeredView: {
+    padding: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  btnStyle: {
+    padding: 10,
+  },
+  separatorH: {
+    height: 10,
+  },
+});
+
 const Home = ({ posts }: any) => {
   const { appTheme } = useContext(AppContext);
-  const [isShowModal, setShowModal] = useState(false);
-  const [isUpdate, setIsUpdate] = useState(false);
-  let version = getVersionName();
-  const alertDetails = alertData.updateVersion;
-  const isFocused = useIsFocused();
 
-  console.log('posts', posts);
+  const [isName, setIsName] = useState('');
+  const [isDescription, setIsDescription] = useState('');
 
-  useEffect(() => {
-    if (isFocused) {
-      checkMinimumVersion();
-    }
-  }, [isFocused]);
+  const { centeredView, btnStyle, separatorH } = styles;
 
-  const checkMinimumVersion = async () => {
+  const onSubmit = async () => {
     try {
-      let shouldUpdate = compareAppVersions({
-        version,
-        minimumVersion: 'v1.0.0', // Wrap whole try block in if condition with apiConfig.serviceConfig and pass minimumVersion from api response
-      });
-      if (shouldUpdate) {
-        setIsUpdate(true);
+      if (!isName && !isDescription) {
         return;
       }
-      return;
-    } catch (e: any) {
-      console.log(e);
+      await database
+        .write(async () => {
+          await database.collections
+            .get('categories')
+            .create((category: any) => {
+              category.name = isName;
+              category.description = isDescription;
+            });
+        })
+        .then(e => {
+          console.log('e', e);
+          setIsName('');
+          setIsDescription('');
+        });
+      //call addCategory function from category model
+    } catch (e) {
+      console.log('Error creating category:', e);
     }
   };
 
-  const updateApp = async () => {
+  const deleteCategory = async (id: string) => {
     try {
-      if (isIOS) {
-        await openLink('');
-      } else {
-        await openLink('');
-      }
-    } catch (e: any) {
-      console.log(e);
+      await database.write(async () => {
+        await database.collections
+          .get('categories')
+          .find(id)
+          .then((e: any) => {
+            e?.destroyPermanently();
+          });
+      });
+    } catch (e) {
+      console.log('Error deleting category:', e);
     }
   };
+
+  const renderItem = ({ item }: any) => {
+    const data = item?._raw;
+    return (
+      <View style={[centeredView, { backgroundColor: appTheme.textBorder }]}>
+        <View>
+          <CustomText>{`Name: ${data?.name}`}</CustomText>
+          <CustomText>{`Description: ${data?.description}`}</CustomText>
+        </View>
+        <Pressable
+          style={[btnStyle, { backgroundColor: appTheme.gray }]}
+          onPress={() => deleteCategory(data?.id)}>
+          <CustomText>Delete</CustomText>
+        </Pressable>
+      </View>
+    );
+  };
+
+  const itemSeparator = () => <View style={separatorH} />;
 
   return (
     <Layout title="Widgets" padding={20}>
-      <CustomText large>Home screen</CustomText>
+      <CustomTextInput
+        placeholder="Enter name"
+        value={isName}
+        onTextChange={text => setIsName(text)}
+        label="Name"
+      />
+      <CustomTextInput
+        placeholder="Enter description"
+        value={isDescription}
+        onTextChange={text => setIsDescription(text)}
+        label="Description"
+      />
       <ButtonComponent
-        onPress={() => {
-          setShowModal(true);
-        }}
+        onPress={onSubmit}
         backColor={appTheme.themeColor}
-        title="Show Modal"
+        title="Add Category"
         borderRadius={10}
       />
-      <BottomModalContainer
-        title="Modal"
-        onClose={() => setShowModal(false)}
-        show={isShowModal}>
-        <CustomText large>Modal</CustomText>
-      </BottomModalContainer>
-      <IsAlertModal
-        visible={isUpdate}
-        data={alertDetails}
-        onClose={() => null}
-        rightBtn={{
-          title: 'Update',
-          onPress: updateApp,
-          style: {
-            borderColor: appTheme.themeColor,
-            backgroundColor: appTheme.themeColor,
-            borderRadius: 0,
-            marginVertical: 0,
-            width: width * 0.8,
-            marginHorizontal: width * 0.05,
-          },
-          textColor: appTheme.tint,
-        }}
+      <FlatList
+        data={posts}
+        renderItem={renderItem}
+        keyExtractor={(item, index) => index.toString()}
+        ItemSeparatorComponent={itemSeparator}
       />
     </Layout>
   );
